@@ -243,6 +243,64 @@ export function Charts({ result }: ChartsProps) {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* Review Clusters */}
+      {aggregatedInsights.reviewClusters?.length > 0 && (
+        <div className="glass-card" style={{ padding: 24, marginTop: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
+            Review Intelligence (Themes)
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+            Market discussion clustered by percentage
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={aggregatedInsights.reviewClusters} layout="vertical" margin={{ left: 10, right: 30 }}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(255,255,255,0.05)"
+                horizontal={false}
+              />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <YAxis
+                type="category"
+                dataKey="theme"
+                tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                width={120}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-bright)",
+                  borderRadius: 10,
+                  fontSize: 13,
+                }}
+                formatter={(v) => [`${v}%`, "Discussion Share"]}
+              />
+              <Bar
+                dataKey="percentage"
+                fill="url(#clusterGradient)"
+                radius={[0, 6, 6, 0]}
+                background={{ fill: "rgba(255,255,255,0.03)", radius: 6 }}
+              />
+              <defs>
+                <linearGradient id="clusterGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#f59e0b" />
+                  <stop offset="100%" stopColor="#f43f5e" />
+                </linearGradient>
+              </defs>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

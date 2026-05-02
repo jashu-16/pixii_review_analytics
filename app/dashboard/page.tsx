@@ -191,7 +191,7 @@ export default function DashboardPage() {
               }}
             >
               Pixii{" "}
-              <span style={{ color: "#6366f1" }}>Analytics</span>
+              <span style={{ color: "#6366f1" }}>Growth Advisor</span>
             </span>
           </div>
         </div>

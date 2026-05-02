@@ -1,203 +1,42 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import type { Review, ProductAnalysis, AggregatedInsights, EnrichedProduct } from "@/lib/types";
+import type { Review, AggregatedInsights, Recommendation, Opportunity, ReviewCluster } from "@/lib/types";
 
 function getGemini() {
   return new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 }
 
-const SYSTEM_INSTRUCTION = `You are an expert product analyst specializing in Amazon marketplace competitive intelligence. 
-Analyze customer reviews and return structured JSON insights. Be precise, actionable, and data-driven.`;
+const SYSTEM_INSTRUCTION = `You are an expert product analyst and AI Growth Advisor specializing in Amazon marketplace competitive intelligence. 
+Analyze customer reviews and return structured JSON business insights. Be precise, actionable, and data-driven.
+Focus on business insights, not generic summaries.`;
 
-export async function analyzeProductReviews(
-  asin: string,
-  productTitle: string,
-  reviews: Review[]
-): Promise<ProductAnalysis> {
-  if (reviews.length === 0) {
-    return {
-      asin,
-      topBuyingReasons: ["No reviews available for analysis"],
-      topComplaints: ["No reviews available for analysis"],
-      decisionFactors: [],
-      sentimentBreakdown: { positive: 60, neutral: 25, negative: 15 },
-      summary: "Insufficient review data for detailed analysis.",
-    };
-  }
-
-  const sampleReviews = reviews.slice(0, 80);
-  const reviewText = sampleReviews
-    .map(
-      (r, i) =>
-        `[${i + 1}] Rating: ${r.rating}/5\nTitle: ${r.title}\nReview: ${r.body}`
-    )
-    .join("\n\n---\n\n");
-
-  const prompt = `Analyze these ${sampleReviews.length} Amazon customer reviews for the product: "${productTitle}"
+async function processBatch(reviews: Review[]): Promise<any> {
+  const prompt = `Analyze these ${reviews.length} Amazon customer reviews for competitor products in this market.
 
 REVIEWS:
-${reviewText}
+${reviews.map((r, i) => `[${i + 1}] Rating: ${r.rating}/5\nTitle: ${r.title}\nReview: ${r.body}`).join("\n\n---\n\n")}
 
-Return ONLY valid JSON (no markdown, no explanation) with this exact structure:
-{
-  "topBuyingReasons": ["reason1", "reason2", "reason3", "reason4", "reason5"],
-  "topComplaints": ["complaint1", "complaint2", "complaint3", "complaint4", "complaint5"],
-  "decisionFactors": [
-    {"factor": "factor name", "importance": "high", "mentionCount": 0}
-  ],
-  "sentimentBreakdown": {
-    "positive": 70,
-    "neutral": 20,
-    "negative": 10
-  },
-  "summary": "2-3 sentence executive summary of the product's market position"
-}
-
+Analyze the reviews and return structured insights based on the schema.
 Rules:
-- topBuyingReasons: Specific reasons why customers love and buy this product (5 items)
-- topComplaints: Specific issues customers complain about (5 items)
-- decisionFactors: 5-7 key factors (e.g., "Battery Life", "Build Quality", "Value for Money")
-- importance must be exactly: "high", "medium", or "low"
-- sentimentBreakdown: Must sum to exactly 100
-- Be specific, not generic`;
+- topBuyingFactors: Top 5 specific reasons customers buy these products.
+- topComplaints: Top 5 specific issues customers complain about.
+- decisionFactors: 5-7 key factors (e.g., "Battery Life", "Build Quality") and count how many reviews mention them.
+- importance must be exactly: "high", "medium", or "low".
+- sentimentBreakdown: Must sum to exactly 100.
+- mentionPct: Approximate percentage of reviews mentioning the factor (0-100).
+- recommendations: 3 actionable recommendations to win the market. priority="high|medium|low".
+- opportunities: 2 market gaps to exploit based on competitor weaknesses.
+- strategy: 3-4 powerful lines summarizing how a new product can dominate this category.
+- reviewClusters: Cluster the reviews into 4-5 core themes (e.g., "Quality", "Design") and their percentage of discussion.
+- Be specific, actionable, and business-focused.`;
 
   try {
     const genAI = getGemini();
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION,
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.3,
-        maxOutputTokens: 1200,
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            topBuyingReasons: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING },
-            },
-            topComplaints: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING },
-            },
-            decisionFactors: {
-              type: SchemaType.ARRAY,
-              items: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  factor: { type: SchemaType.STRING },
-                  importance: { type: SchemaType.STRING },
-                  mentionCount: { type: SchemaType.NUMBER },
-                },
-              },
-            },
-            sentimentBreakdown: {
-              type: SchemaType.OBJECT,
-              properties: {
-                positive: { type: SchemaType.NUMBER },
-                neutral: { type: SchemaType.NUMBER },
-                negative: { type: SchemaType.NUMBER },
-              },
-            },
-            summary: { type: SchemaType.STRING },
-          },
-        },
-      },
-    });
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const parsed = JSON.parse(text);
-
-    return {
-      asin,
-      topBuyingReasons: parsed.topBuyingReasons || [],
-      topComplaints: parsed.topComplaints || [],
-      decisionFactors: parsed.decisionFactors || [],
-      sentimentBreakdown: parsed.sentimentBreakdown || {
-        positive: 60,
-        neutral: 25,
-        negative: 15,
-      },
-      summary: parsed.summary || "",
-    };
-  } catch (err) {
-    console.error("Gemini analysis error:", err);
-    return {
-      asin,
-      topBuyingReasons: ["Analysis failed — API error"],
-      topComplaints: ["Analysis failed — API error"],
-      decisionFactors: [],
-      sentimentBreakdown: { positive: 60, neutral: 25, negative: 15 },
-      summary: "Analysis could not be completed.",
-    };
-  }
-}
-
-export async function aggregateInsights(
-  products: EnrichedProduct[]
-): Promise<AggregatedInsights> {
-  const validProducts = products.filter((p) => p.analysis !== null);
-  if (validProducts.length === 0) {
-    return {
-      topBuyingFactors: [],
-      topComplaints: [],
-      marketSentiment: { positive: 60, neutral: 25, negative: 15 },
-      keyDecisionFactors: [],
-    };
-  }
-
-  const allReasons = validProducts.flatMap((p) => p.analysis!.topBuyingReasons);
-  const allComplaints = validProducts.flatMap((p) => p.analysis!.topComplaints);
-  const allFactors = validProducts.flatMap((p) => p.analysis!.decisionFactors);
-
-  const avgSentiment = {
-    positive: Math.round(
-      validProducts.reduce((s, p) => s + p.analysis!.sentimentBreakdown.positive, 0) /
-        validProducts.length
-    ),
-    neutral: Math.round(
-      validProducts.reduce((s, p) => s + p.analysis!.sentimentBreakdown.neutral, 0) /
-        validProducts.length
-    ),
-    negative: Math.round(
-      validProducts.reduce((s, p) => s + p.analysis!.sentimentBreakdown.negative, 0) /
-        validProducts.length
-    ),
-  };
-
-  const prompt = `You are aggregating competitive intelligence from ${validProducts.length} Amazon competitor products.
-
-Buying reasons across all products:
-${allReasons.join("\n")}
-
-Complaints across all products:
-${allComplaints.join("\n")}
-
-Return ONLY valid JSON:
-{
-  "topBuyingFactors": [
-    {"factor": "string", "mentionPct": 0}
-  ],
-  "topComplaints": [
-    {"complaint": "string", "mentionPct": 0}
-  ]
-}
-
-Rules:
-- Cluster similar themes together into 5-7 topBuyingFactors
-- 5-6 topComplaints with mentionPct
-- mentionPct should be between 10-95 (realistic estimates)`;
-
-  try {
-    const genAI = getGemini();
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.2,
-        maxOutputTokens: 700,
         responseSchema: {
           type: SchemaType.OBJECT,
           properties: {
@@ -221,18 +60,133 @@ Rules:
                 },
               },
             },
+            decisionFactors: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  factor: { type: SchemaType.STRING },
+                  importance: { type: SchemaType.STRING },
+                  mentionCount: { type: SchemaType.NUMBER },
+                },
+              },
+            },
+            sentimentBreakdown: {
+              type: SchemaType.OBJECT,
+              properties: {
+                positive: { type: SchemaType.NUMBER },
+                neutral: { type: SchemaType.NUMBER },
+                negative: { type: SchemaType.NUMBER },
+              },
+            },
+            recommendations: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING },
+                  reason: { type: SchemaType.STRING },
+                  action: { type: SchemaType.STRING },
+                  priority: { type: SchemaType.STRING },
+                },
+              },
+            },
+            opportunities: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING },
+                  insight: { type: SchemaType.STRING },
+                  action: { type: SchemaType.STRING },
+                },
+              },
+            },
+            strategy: { type: SchemaType.STRING },
+            reviewClusters: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  theme: { type: SchemaType.STRING },
+                  percentage: { type: SchemaType.NUMBER },
+                },
+              },
+            },
           },
         },
       },
     });
 
     const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const parsed = JSON.parse(text);
+    let text = result.response.text();
+    text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+    
+    try {
+      return JSON.parse(text);
+    } catch (parseErr) {
+      console.error("Gemini batch JSON parse error:", parseErr);
+      console.error("Raw text was:", text);
+      return null;
+    }
+  } catch (err) {
+    console.error("Gemini batch analysis error:", err);
+    return null;
+  }
+}
 
-    // Aggregate decision factors
-    const factorMap = new Map<string, { total: number; count: number }>();
-    allFactors.forEach((f) => {
+export async function analyzeMarketReviews(
+  allReviews: Review[]
+): Promise<AggregatedInsights> {
+  const defaultInsight = {
+    topBuyingFactors: [],
+    topComplaints: [],
+    marketSentiment: { positive: 60, neutral: 25, negative: 15 },
+    keyDecisionFactors: [],
+    recommendations: [],
+    opportunities: [],
+    strategy: "Analysis could not generate a valid strategy.",
+    reviewClusters: [],
+  };
+
+  if (allReviews.length === 0) {
+    return defaultInsight;
+  }
+
+  const CHUNK_SIZE = 50;
+  const batches: Review[][] = [];
+  for (let i = 0; i < allReviews.length; i += CHUNK_SIZE) {
+    batches.push(allReviews.slice(i, i + CHUNK_SIZE));
+  }
+
+  const batchesToProcess = batches.slice(0, 4);
+
+  const batchResults = await Promise.all(
+    batchesToProcess.map((batch) => processBatch(batch))
+  );
+
+  const validResults = batchResults.filter((r) => r !== null);
+
+  if (validResults.length === 0) {
+    return defaultInsight;
+  }
+
+  let pos = 0, neu = 0, neg = 0;
+  const factorMap = new Map<string, { total: number; count: number }>();
+  const buyMap = new Map<string, number[]>();
+  const complaintMap = new Map<string, number[]>();
+  const clusterMap = new Map<string, number[]>();
+  
+  let allRecs: Recommendation[] = [];
+  let allOpps: Opportunity[] = [];
+  let strategies: string[] = [];
+
+  for (const res of validResults) {
+    pos += res.sentimentBreakdown?.positive || 0;
+    neu += res.sentimentBreakdown?.neutral || 0;
+    neg += res.sentimentBreakdown?.negative || 0;
+
+    (res.decisionFactors || []).forEach((f: any) => {
       const key = f.factor.toLowerCase();
       const existing = factorMap.get(key);
       if (existing) {
@@ -243,30 +197,104 @@ Rules:
       }
     });
 
-    const keyDecisionFactors = Array.from(factorMap.entries())
-      .map(([factor, data]) => ({
-        factor: factor.charAt(0).toUpperCase() + factor.slice(1),
-        importance: (data.count >= 3 ? "high" : data.count >= 2 ? "medium" : "low") as
-          | "high"
-          | "medium"
-          | "low",
-        mentionCount: data.total,
-      }))
-      .sort((a, b) => b.mentionCount - a.mentionCount)
-      .slice(0, 7);
+    (res.topBuyingFactors || []).forEach((f: any) => {
+      const key = f.factor.toLowerCase();
+      if (!buyMap.has(key)) buyMap.set(key, []);
+      buyMap.get(key)!.push(f.mentionPct);
+    });
 
-    return {
-      topBuyingFactors: parsed.topBuyingFactors || [],
-      topComplaints: parsed.topComplaints || [],
-      marketSentiment: avgSentiment,
-      keyDecisionFactors,
-    };
-  } catch {
-    return {
-      topBuyingFactors: allReasons.slice(0, 6).map((r) => ({ factor: r, mentionPct: 50 })),
-      topComplaints: allComplaints.slice(0, 5).map((c) => ({ complaint: c, mentionPct: 30 })),
-      marketSentiment: avgSentiment,
-      keyDecisionFactors: [],
-    };
+    (res.topComplaints || []).forEach((c: any) => {
+      const key = c.complaint.toLowerCase();
+      if (!complaintMap.has(key)) complaintMap.set(key, []);
+      complaintMap.get(key)!.push(c.mentionPct);
+    });
+    
+    (res.reviewClusters || []).forEach((c: any) => {
+      const key = c.theme.toLowerCase();
+      if (!clusterMap.has(key)) clusterMap.set(key, []);
+      clusterMap.get(key)!.push(c.percentage);
+    });
+
+    if (res.recommendations) allRecs.push(...res.recommendations);
+    if (res.opportunities) allOpps.push(...res.opportunities);
+    if (res.strategy) strategies.push(res.strategy);
   }
+
+  const numBatches = validResults.length;
+  const marketSentiment = {
+    positive: Math.round(pos / numBatches),
+    neutral: Math.round(neu / numBatches),
+    negative: Math.round(neg / numBatches),
+  };
+
+  const totalSent = marketSentiment.positive + marketSentiment.neutral + marketSentiment.negative;
+  if (totalSent !== 100 && totalSent > 0) {
+    const diff = 100 - totalSent;
+    marketSentiment.positive += diff;
+  }
+
+  const keyDecisionFactors = Array.from(factorMap.entries())
+    .map(([factor, data]) => ({
+      factor: factor.charAt(0).toUpperCase() + factor.slice(1),
+      importance: (data.count >= 2 ? "high" : "medium") as "high" | "medium" | "low",
+      mentionCount: data.total,
+    }))
+    .sort((a, b) => b.mentionCount - a.mentionCount)
+    .slice(0, 7);
+
+  const topBuyingFactors = Array.from(buyMap.entries())
+    .map(([factor, pcts]) => ({
+      factor: factor.charAt(0).toUpperCase() + factor.slice(1),
+      mentionPct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+    }))
+    .sort((a, b) => b.mentionPct - a.mentionPct)
+    .slice(0, 5);
+
+  const topComplaints = Array.from(complaintMap.entries())
+    .map(([complaint, pcts]) => ({
+      complaint: complaint.charAt(0).toUpperCase() + complaint.slice(1),
+      mentionPct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+    }))
+    .sort((a, b) => b.mentionPct - a.mentionPct)
+    .slice(0, 5);
+    
+  const reviewClusters = Array.from(clusterMap.entries())
+    .map(([theme, pcts]) => ({
+      theme: theme.charAt(0).toUpperCase() + theme.slice(1),
+      percentage: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+    }))
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 5);
+
+  // Deduplicate and rank recommendations
+  const uniqueRecs = new Map<string, Recommendation>();
+  for (const r of allRecs) {
+    const key = r.title.toLowerCase();
+    if (!uniqueRecs.has(key)) uniqueRecs.set(key, r);
+  }
+  const recommendations = Array.from(uniqueRecs.values())
+    .sort((a, b) => (a.priority === "high" ? -1 : 1))
+    .slice(0, 3);
+
+  // Deduplicate opportunities
+  const uniqueOpps = new Map<string, Opportunity>();
+  for (const o of allOpps) {
+    const key = o.title.toLowerCase();
+    if (!uniqueOpps.has(key)) uniqueOpps.set(key, o);
+  }
+  const opportunities = Array.from(uniqueOpps.values()).slice(0, 2);
+
+  // Choose the longest strategy (most detailed) as the representative strategy
+  const strategy = strategies.sort((a, b) => b.length - a.length)[0] || defaultInsight.strategy;
+
+  return {
+    topBuyingFactors,
+    topComplaints,
+    marketSentiment,
+    keyDecisionFactors,
+    recommendations,
+    opportunities,
+    strategy,
+    reviewClusters,
+  };
 }
