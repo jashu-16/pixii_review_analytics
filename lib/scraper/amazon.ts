@@ -225,36 +225,94 @@ export function extractSearchKeyword(title: string): string {
     .join(" ");
 }
 
-// Scrape reviews for a product
+// Scrape reviews for a product (parallel pages)
 export async function scrapeReviews(
   asin: string,
-  maxPages = 2
+  maxPages = 3 // Increase default pages
 ): Promise<Review[]> {
-  const reviews: Review[] = [];
+  const pages = Array.from({ length: maxPages }, (_, i) => i + 1);
 
-  for (let page = 1; page <= maxPages; page++) {
-    const url = `${BASE_URL}/product-reviews/${asin}?pageNumber=${page}&reviewerType=all_reviews&sortBy=recent`;
-    const html = await fetchWithRetry(url);
-    if (!html) break;
+  const results = await Promise.all(
+    pages.map(async (page) => {
+      const url = `${BASE_URL}/product-reviews/${asin}?pageNumber=${page}&reviewerType=all_reviews&sortBy=recent`;
+      const html = await fetchWithRetry(url);
+      if (!html) return [];
 
-    const $ = cheerio.load(html);
+      const $ = cheerio.load(html);
+      const pageReviews: Review[] = [];
 
-    $("[data-hook='review']").each((_, el) => {
-      const ratingText =
-        $(el).find("[data-hook='review-star-rating'] .a-icon-alt").text() ||
-        $(el).find(".review-rating .a-icon-alt").text();
-      const rating = parseFloat(ratingText.match(/[\d.]+/)?.[0] || "3");
-      const title = $(el).find("[data-hook='review-title'] span").last().text().trim();
-      const body = $(el).find("[data-hook='review-body'] span").text().trim();
-      const date = $(el).find("[data-hook='review-date']").text().trim();
+      $("[data-hook='review']").each((_, el) => {
+        const ratingText =
+          $(el).find("[data-hook='review-star-rating'] .a-icon-alt").text() ||
+          $(el).find(".review-rating .a-icon-alt").text();
+        const rating = parseFloat(ratingText.match(/[\d.]+/)?.[0] || "3");
+        const title = $(el)
+          .find("[data-hook='review-title'] span")
+          .last()
+          .text()
+          .trim();
+        const body = $(el).find("[data-hook='review-body'] span").text().trim();
+        const date = $(el).find("[data-hook='review-date']").text().trim();
 
-      if (body && body.length > 20) {
-        reviews.push({ title, body: body.substring(0, 500), rating, date });
-      }
-    });
+        if (body && body.length > 20) {
+          pageReviews.push({
+            title,
+            body: body.substring(0, 500),
+            rating,
+            date,
+          });
+        }
+      });
 
-    if (reviews.length >= 100) break;
+      return pageReviews;
+    })
+  );
+
+  const flatReviews = results.flat();
+
+  // Deduplicate by review body
+  let uniqueReviews: Review[] = [];
+  const seenBodies = new Set<string>();
+
+  for (const review of flatReviews) {
+    if (!seenBodies.has(review.body)) {
+      seenBodies.add(review.body);
+      uniqueReviews.push(review);
+    }
   }
 
-  return reviews.slice(0, 100);
+  // Fallback: If dedicated review pages are blocked, try the main product page
+  if (uniqueReviews.length === 0) {
+    console.log(`[Fallback] Dedicated review page blocked for ${asin}, fetching from product page...`);
+    const fallbackUrl = `${BASE_URL}/dp/${asin}`;
+    const fallbackHtml = await fetchWithRetry(fallbackUrl);
+    if (fallbackHtml) {
+      const $ = cheerio.load(fallbackHtml);
+      $("[data-hook='review'], .review").each((_, el) => {
+        const ratingText =
+          $(el).find("[data-hook='review-star-rating'] .a-icon-alt").text() ||
+          $(el).find(".review-rating .a-icon-alt").text();
+        const rating = parseFloat(ratingText.match(/[\d.]+/)?.[0] || "3");
+        const title = $(el)
+          .find("[data-hook='review-title'] span")
+          .last()
+          .text()
+          .trim();
+        const body = $(el).find("[data-hook='review-body'] span").text().trim();
+        const date = $(el).find("[data-hook='review-date']").text().trim();
+
+        if (body && body.length > 20 && !seenBodies.has(body)) {
+          seenBodies.add(body);
+          uniqueReviews.push({
+            title,
+            body: body.substring(0, 500),
+            rating,
+            date,
+          });
+        }
+      });
+    }
+  }
+
+  return uniqueReviews;
 }

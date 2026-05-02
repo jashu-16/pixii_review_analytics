@@ -127,6 +127,73 @@ export function MarketOverview({ result }: MarketOverviewProps) {
           );
         })}
       </div>
+      <h2 className="section-heading" style={{ marginTop: 40, marginBottom: 20 }}>
+        🎯 Winning Market Strategy
+      </h2>
+      <div
+        className="glass-card"
+        style={{
+          padding: "24px 32px",
+          background: "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.05))",
+          borderLeft: "4px solid #6366f1",
+        }}
+      >
+        <p style={{ fontSize: 18, color: "var(--text-primary)", lineHeight: 1.6, fontWeight: 500 }}>
+          {result.aggregatedInsights.strategy || "Gathering market insights..."}
+        </p>
+      </div>
+
+      {result.benchmark && (
+        <>
+          <h2 className="section-heading" style={{ marginTop: 40, marginBottom: 20 }}>
+            ⚔️ Your Product vs Market
+          </h2>
+          <div className="glass-card" style={{ padding: "0", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <thead>
+                <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--border)" }}>
+                  <th style={{ padding: "16px 24px", color: "var(--text-secondary)", fontWeight: 500 }}>Metric</th>
+                  <th style={{ padding: "16px 24px", color: "var(--text-secondary)", fontWeight: 500 }}>Your Product</th>
+                  <th style={{ padding: "16px 24px", color: "var(--text-secondary)", fontWeight: 500 }}>Market Average</th>
+                  <th style={{ padding: "16px 24px", color: "var(--text-secondary)", fontWeight: 500 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: "Rating", key: "rating" as const, format: (v: number) => v.toFixed(1) },
+                  { label: "Price", key: "price" as const, format: (v: number) => `₹${v.toLocaleString()}` },
+                  { label: "Reviews", key: "reviews" as const, format: (v: number) => v.toLocaleString() },
+                ].map((row, i) => {
+                  const b = result.benchmark[row.key];
+                  const isRed = b.status === "below";
+                  return (
+                    <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td style={{ padding: "16px 24px", color: "var(--text-primary)", fontWeight: 500 }}>{row.label}</td>
+                      <td style={{ padding: "16px 24px", color: "var(--text-primary)" }}>{row.format(b.your_product)}</td>
+                      <td style={{ padding: "16px 24px", color: "var(--text-secondary)" }}>{row.format(b.market_avg)}</td>
+                      <td style={{ padding: "16px 24px" }}>
+                        <span
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            background: isRed ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                            color: isRed ? "#ef4444" : "#22c55e",
+                          }}
+                        >
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

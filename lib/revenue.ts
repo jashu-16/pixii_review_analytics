@@ -18,19 +18,22 @@ export function estimateRevenue(
   rating: number,
   currency = "INR"
 ): RevenueEstimate {
-  let multiplier = 1.0;
-  if (rating >= 4.5) multiplier = 1.2;
-  else if (rating >= 4.0) multiplier = 1.0;
-  else if (rating >= 3.5) multiplier = 0.8;
-  else multiplier = 0.5;
-
-  const estimatedMonthlySales = Math.round(reviewCount * 0.3 * multiplier);
+  const ratingMultiplier = rating > 0 ? rating / 5 : 0.5;
+  const estimatedMonthlySales = Math.max(0, Math.round(reviewCount * 0.3 * ratingMultiplier));
   const estimatedMonthlyRevenue = Math.round(estimatedMonthlySales * price);
+
+  let confidence: "High" | "Medium" | "Low" = "Low";
+  if (reviewCount > 500) {
+    confidence = "High";
+  } else if (reviewCount > 100) {
+    confidence = "Medium";
+  }
 
   return {
     estimatedMonthlySales,
     estimatedMonthlyRevenue,
     currency,
+    confidence,
   };
 }
 

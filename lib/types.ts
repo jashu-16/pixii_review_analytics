@@ -43,6 +43,7 @@ export interface RevenueEstimate {
   estimatedMonthlySales: number;
   estimatedMonthlyRevenue: number;
   currency: string;
+  confidence: "High" | "Medium" | "Low";
 }
 
 export interface EnrichedProduct {
@@ -52,17 +53,52 @@ export interface EnrichedProduct {
   reviewCount: number;
 }
 
+export interface Recommendation {
+  title: string;
+  reason: string;
+  action: string;
+  priority: "high" | "medium" | "low";
+}
+
+export interface Opportunity {
+  title: string;
+  insight: string;
+  action: string;
+}
+
+export interface ReviewCluster {
+  theme: string;
+  percentage: number;
+}
+
 export interface AggregatedInsights {
   topBuyingFactors: Array<{ factor: string; mentionPct: number }>;
   topComplaints: Array<{ complaint: string; mentionPct: number }>;
   marketSentiment: SentimentBreakdown;
   keyDecisionFactors: DecisionFactor[];
+  recommendations: Recommendation[];
+  opportunities: Opportunity[];
+  strategy: string;
+  reviewClusters: ReviewCluster[];
+}
+
+export interface BenchmarkStats {
+  your_product: number;
+  market_avg: number;
+  status: "strong" | "good" | "below";
+}
+
+export interface Benchmark {
+  rating: BenchmarkStats;
+  price: BenchmarkStats;
+  reviews: BenchmarkStats;
 }
 
 export interface AnalysisResult {
   seedAsin: string;
   products: EnrichedProduct[];
   aggregatedInsights: AggregatedInsights;
+  benchmark: Benchmark;
   marketStats: {
     totalMonthlyRevenue: number;
     avgPrice: number;

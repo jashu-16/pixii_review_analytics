@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 import {
   extractAsin,
   scrapeProductDetails,
@@ -7,7 +9,7 @@ import {
   scrapeReviews,
 } from "@/lib/scraper/amazon";
 import { estimateRevenue } from "@/lib/revenue";
-import { analyzeProductReviews, aggregateInsights } from "@/lib/ai/analyzer";
+import { analyzeMarketReviews } from "@/lib/ai/analyzer";
 import type {
   ProgressStep,
   EnrichedProduct,
@@ -27,9 +29,7 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return new Response(
-      `data: ${JSON.stringify({ type: "ERROR", message: "Invalid request body — please provide a JSON body with a 'url' field." })}
-
-`,
+      `data: ${JSON.stringify({ type: "ERROR", message: "Invalid request body — please provide a JSON body with a 'url' field." })}\n\n`,
       { headers: { "Content-Type": "text/event-stream" }, status: 400 }
     );
   }
@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
 
         // STEP 5: Scrape reviews + analyze (sequential to avoid rate limits)
         const enrichedProducts: EnrichedProduct[] = [];
+        const allReviewsLog: any[] = []; // To keep raw reviews for debugging
 
         for (let i = 0; i < allProductData.length; i++) {
           const product = allProductData[i];
@@ -131,22 +132,10 @@ export async function POST(req: NextRequest) {
             productTitle: product.title.substring(0, 60),
           });
 
-          const reviews = await scrapeReviews(product.asin, 2);
+          const reviews = await scrapeReviews(product.asin, 3);
+          allReviewsLog.push(...reviews.map(r => ({ asin: product.asin, ...r })));
 
-          // AI Analysis
-          send({
-            type: "AI_ANALYSIS",
-            message: `Analyzing ${reviews.length} reviews with AI...`,
-            index: i + 1,
-            total: allProductData.length,
-            productTitle: product.title.substring(0, 60),
-          });
-
-          const analysis = await analyzeProductReviews(
-            product.asin,
-            product.title,
-            reviews
-          );
+          const analysis = null;
 
           const revenue = estimateRevenue(
             product.reviewCount,
@@ -164,10 +153,12 @@ export async function POST(req: NextRequest) {
         }
 
         // STEP 6: Aggregate insights
-        send({ type: "AGGREGATING", message: "Generating market-wide insights..." });
-        const aggregated = await aggregateInsights(enrichedProducts);
+        send({ type: "AGGREGATING", message: "Generating market-wide insights from all reviews..." });
+        
+        // Use the new analyzeMarketReviews which chunks and processes everything
+        const aggregated = await analyzeMarketReviews(allReviewsLog);
 
-        // STEP 7: Compute market stats
+        // STEP 7: Compute market stats and benchmark
         const prices = enrichedProducts.map((p) => p.product.price).filter((p) => p > 0);
         const ratings = enrichedProducts.map((p) => p.product.rating).filter((r) => r > 0);
         const totalRevenue = enrichedProducts.reduce(
@@ -175,38 +166,87 @@ export async function POST(req: NextRequest) {
           0
         );
 
+        const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+        const avgRating = ratings.length > 0 ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : 0;
+        const totalReviews = enrichedProducts.reduce((sum, p) => sum + p.product.reviewCount, 0);
+        const avgReviews = Math.round(totalReviews / enrichedProducts.length);
+
+        const seedProductEnriched = enrichedProducts.find(p => p.product.isSeedProduct);
+        const seedRating = seedProductEnriched?.product.rating || 0;
+        const seedPrice = seedProductEnriched?.product.price || 0;
+        const seedReviews = seedProductEnriched?.product.reviewCount || 0;
+
+        const benchmark = {
+          rating: {
+            your_product: seedRating,
+            market_avg: avgRating,
+            status: seedRating >= avgRating + 0.2 ? "strong" : seedRating >= avgRating - 0.2 ? "good" : "below"
+          },
+          price: {
+            your_product: seedPrice,
+            market_avg: avgPrice,
+            status: seedPrice <= avgPrice * 0.9 ? "strong" : seedPrice <= avgPrice * 1.1 ? "good" : "below"
+          },
+          reviews: {
+            your_product: seedReviews,
+            market_avg: avgReviews,
+            status: seedReviews >= avgReviews * 1.2 ? "strong" : seedReviews >= avgReviews * 0.8 ? "good" : "below"
+          }
+        } as const;
+
         const result: AnalysisResult = {
           seedAsin,
           products: enrichedProducts,
           aggregatedInsights: aggregated,
+          benchmark: benchmark as any,
           marketStats: {
             totalMonthlyRevenue: totalRevenue,
-            avgPrice:
-              prices.length > 0
-                ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-                : 0,
-            avgRating:
-              ratings.length > 0
-                ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
-                : 0,
-            totalReviews: enrichedProducts.reduce(
-              (sum, p) => sum + p.product.reviewCount,
-              0
-            ),
+            avgPrice,
+            avgRating,
+            totalReviews,
             currency: "INR",
           },
           analyzedAt: new Date().toISOString(),
         };
 
+        // LOG ALL SCRAPED DATA FOR DEBUGGING
+        try {
+          const logDir = path.join(process.cwd(), "logs");
+          if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir);
+          }
+          const logFilePath = path.join(logDir, `scrape_log_${Date.now()}.json`);
+          fs.writeFileSync(
+            logFilePath,
+            JSON.stringify(
+              {
+                timestamp: new Date().toISOString(),
+                seedAsin,
+                allProductData,
+                allReviewsLog,
+              },
+              null,
+              2
+            )
+          );
+          console.log(`[DEBUG] Scraping data logged to ${logFilePath}`);
+        } catch (err) {
+          console.error("Failed to write scraping log:", err);
+        }
+
         send({ type: "COMPLETE", result });
-        controller.close();
+        try {
+          controller.close();
+        } catch { /* already closed */ }
       } catch (err) {
         console.error("Analysis error:", err);
         send({
           type: "ERROR",
           message: `Unexpected error: ${err instanceof Error ? err.message : "Unknown error"}`,
         });
-        controller.close();
+        try {
+          controller.close();
+        } catch { /* already closed */ }
       }
     },
   });
