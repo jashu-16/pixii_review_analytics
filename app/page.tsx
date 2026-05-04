@@ -30,7 +30,7 @@ const FEATURES = [
   {
     icon: MessageSquare,
     title: "AI Review Analysis",
-    desc: "Gemini 1.5 Flash extracts buying reasons, complaints & decision factors from hundreds of reviews",
+    desc: "Our AI engine extracts buying reasons, complaints & decision factors from hundreds of reviews",
     color: "#8b5cf6",
   },
   {
@@ -50,7 +50,7 @@ const FEATURES = [
 const STEPS = [
   { step: "01", title: "Paste URL", desc: "Any Amazon.in product link" },
   { step: "02", title: "AI Scrapes", desc: "10 products + 100+ reviews each" },
-  { step: "03", title: "Deep Analysis", desc: "Gemini 1.5 Flash extracts insights" },
+  { step: "03", title: "Deep Analysis", desc: "Our AI extracts critical market insights" },
   { step: "04", title: "Dashboard", desc: "Revenue, sentiment, drivers" },
 ];
 
@@ -68,7 +68,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!url) { setIsValid(null); return; }
-    const amazonPattern = /amazon\.(in|com).*\/dp\/[A-Z0-9]{10}/i;
+    const amazonPattern = /amazon\.([a-z\.]{2,6})\/.*dp\/[A-Z0-9]{10}/i;
     const asinPattern = /[A-Z0-9]{10}/;
     setIsValid(amazonPattern.test(url) || asinPattern.test(url));
   }, [url]);
@@ -81,6 +81,7 @@ export default function HomePage() {
     setIsLoading(true);
     // Store URL and navigate to dashboard
     sessionStorage.setItem("analyzeUrl", url.trim());
+    sessionStorage.setItem("triggerAnalysis", "true");
     router.push("/dashboard");
   };
 
@@ -152,7 +153,7 @@ export default function HomePage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-              Powered by Gemini 1.5 Flash
+              Grow Your Amazon Brand
             </span>
             <div
               style={{
@@ -205,6 +206,8 @@ export default function HomePage() {
               color: "#a5b4fc",
               fontWeight: 500,
               marginBottom: 32,
+              opacity: 0,
+              animation: "revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards",
             }}
           >
             <Zap size={13} />
@@ -220,6 +223,8 @@ export default function HomePage() {
               letterSpacing: "-0.03em",
               marginBottom: 24,
               color: "var(--text-primary)",
+              opacity: 0,
+              animation: "revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards",
             }}
           >
             Decode your{" "}
@@ -235,6 +240,8 @@ export default function HomePage() {
               lineHeight: 1.6,
               maxWidth: 600,
               margin: "0 auto 48px",
+              opacity: 0,
+              animation: "revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards",
             }}
           >
             Paste one Amazon product URL. Get revenue estimates, AI-extracted
@@ -246,7 +253,7 @@ export default function HomePage() {
           </p>
 
           {/* Input Form */}
-          <form onSubmit={handleSubmit} style={{ maxWidth: 680, margin: "0 auto" }}>
+          <form onSubmit={handleSubmit} style={{ maxWidth: 680, margin: "0 auto", opacity: 0, animation: "revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards" }}>
             <div
               style={{
                 display: "flex",
@@ -324,6 +331,8 @@ export default function HomePage() {
               gap: 8,
               marginTop: 20,
               flexWrap: "wrap",
+              opacity: 0,
+              animation: "revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards",
             }}
           >
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Try an example:</span>
@@ -349,33 +358,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* How it works */}
-        <div style={{ maxWidth: 860, margin: "60px auto", padding: "0 24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1 }}>
-            {STEPS.map((step, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "28px 24px",
-                  background: i === 0 ? "rgba(99,102,241,0.05)" : "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRight: i < 3 ? "none" : "1px solid var(--border)",
-                  borderRadius: i === 0 ? "12px 0 0 12px" : i === 3 ? "0 12px 12px 0" : 0,
-                }}
-              >
-                <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, marginBottom: 8, letterSpacing: "0.1em" }}>
-                  STEP {step.step}
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
-                  {step.title}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                  {step.desc}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+
 
         {/* Features Grid */}
         <div style={{ maxWidth: 1100, margin: "0 auto 80px", padding: "0 24px" }}>
@@ -452,7 +435,7 @@ export default function HomePage() {
               { value: "10", label: "Products Analyzed" },
               { value: "100+", label: "Reviews per Product" },
               { value: "< 60s", label: "Full Analysis Time" },
-              { value: "AI", label: "Gemini 1.5 Flash Powered" },
+              { value: "AI", label: "Actionable Market Insights" },
             ].map((stat, i) => (
               <div key={i} style={{ textAlign: "center" }}>
                 <div
@@ -485,13 +468,16 @@ export default function HomePage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <Clock size={12} />
-            Built with Next.js · Deployed on Vercel · Powered by OpenAI Gemini 1.5 Flash
+            © {new Date().getFullYear()} Pixii Growth Advisor. Accelerating Amazon sellers worldwide.
           </div>
         </footer>
       </div>
 
       <style>{`
+        @keyframes revealUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }

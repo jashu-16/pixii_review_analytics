@@ -18,6 +18,7 @@ import type {
 
 // Vercel Pro: 60s max, Hobby: 10s (not enough — use Pro or self-host)
 export const maxDuration = 60;
+export const dynamic = "force-dynamic";
 
 function encode(step: ProgressStep): string {
   return `data: ${JSON.stringify(step)}\n\n`;
@@ -254,7 +255,8 @@ export async function POST(req: NextRequest) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
+      "Content-Encoding": "none",
       Connection: "keep-alive",
     },
   });
