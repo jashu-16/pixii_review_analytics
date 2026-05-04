@@ -283,7 +283,6 @@ export async function scrapeReviews(
 
   // Fallback: If dedicated review pages are blocked, try the main product page
   if (uniqueReviews.length === 0) {
-    console.log(`[Fallback] Dedicated review page blocked for ${asin}, fetching from product page...`);
     const fallbackUrl = `${BASE_URL}/dp/${asin}`;
     const fallbackHtml = await fetchWithRetry(fallbackUrl);
     if (fallbackHtml) {

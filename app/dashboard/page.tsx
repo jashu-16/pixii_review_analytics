@@ -25,16 +25,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const url = sessionStorage.getItem("analyzeUrl");
+    const trigger = sessionStorage.getItem("triggerAnalysis");
+
     if (!url) {
       router.replace("/");
       return;
     }
-    startAnalysis(url);
+
+    if (trigger === "true") {
+      // Remove the trigger after a short delay to survive React StrictMode's immediate unmount/remount
+      setTimeout(() => sessionStorage.removeItem("triggerAnalysis"), 500);
+      startAnalysis(url);
+    } else {
+      // If there's no trigger on mount, they navigated Back/Forward
+      router.replace("/");
+    }
 
     return () => {
       abortRef.current?.abort();
     };
-  }, []);
+  }, [router]);
 
   const startAnalysis = async (url: string) => {
     setIsLoading(true);

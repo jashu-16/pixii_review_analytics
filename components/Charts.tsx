@@ -55,8 +55,7 @@ export function Charts({ result }: ChartsProps) {
 
   // Feature importance bar data
   const featureData = aggregatedInsights.topBuyingFactors.slice(0, 6).map((f) => ({
-    name:
-      f.factor.length > 18 ? f.factor.substring(0, 18) + "…" : f.factor,
+    name: f.factor,
     value: f.mentionPct,
   }));
 
@@ -192,55 +191,28 @@ export function Charts({ result }: ChartsProps) {
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
             Feature Importance (Buying Factors)
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 24 }}>
             % of products where this factor was mentioned
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={featureData} layout="vertical" margin={{ left: 10, right: 30 }}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.05)"
-                horizontal={false}
-              />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tick={{ fill: "var(--text-muted)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `${v}%`}
-              />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                width={120}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-bright)",
-                  borderRadius: 10,
-                  fontSize: 13,
-                }}
-                formatter={(v) => [`${v}%`, "Mention Rate"]}
-              />
-              <Bar
-                dataKey="value"
-                fill="url(#featureGradient)"
-                radius={[0, 6, 6, 0]}
-                background={{ fill: "rgba(255,255,255,0.03)", radius: 6 }}
-              />
-              <defs>
-                <linearGradient id="featureGradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#6366f1" />
-                  <stop offset="100%" stopColor="#06b6d4" />
-                </linearGradient>
-              </defs>
-            </BarChart>
-          </ResponsiveContainer>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {featureData.map((f, i) => (
+              <div key={i}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, alignItems: "center", gap: 16 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500, lineHeight: 1.4 }}>{f.name}</span>
+                  <span style={{ fontSize: 13, color: "#06b6d4", fontWeight: 600 }}>{f.value}%</span>
+                </div>
+                <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${f.value}%`,
+                    background: "linear-gradient(90deg, #6366f1, #06b6d4)",
+                    borderRadius: 3,
+                    transition: "width 1s ease-out"
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -250,55 +222,28 @@ export function Charts({ result }: ChartsProps) {
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
             Review Intelligence (Themes)
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 24 }}>
             Market discussion clustered by percentage
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={aggregatedInsights.reviewClusters} layout="vertical" margin={{ left: 10, right: 30 }}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.05)"
-                horizontal={false}
-              />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tick={{ fill: "var(--text-muted)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `${v}%`}
-              />
-              <YAxis
-                type="category"
-                dataKey="theme"
-                tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                width={120}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-bright)",
-                  borderRadius: 10,
-                  fontSize: 13,
-                }}
-                formatter={(v) => [`${v}%`, "Discussion Share"]}
-              />
-              <Bar
-                dataKey="percentage"
-                fill="url(#clusterGradient)"
-                radius={[0, 6, 6, 0]}
-                background={{ fill: "rgba(255,255,255,0.03)", radius: 6 }}
-              />
-              <defs>
-                <linearGradient id="clusterGradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#f59e0b" />
-                  <stop offset="100%" stopColor="#f43f5e" />
-                </linearGradient>
-              </defs>
-            </BarChart>
-          </ResponsiveContainer>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {aggregatedInsights.reviewClusters.map((cluster, i) => (
+              <div key={i}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, alignItems: "center", gap: 16 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500, lineHeight: 1.4 }}>{cluster.theme}</span>
+                  <span style={{ fontSize: 13, color: "#f43f5e", fontWeight: 600 }}>{cluster.percentage}%</span>
+                </div>
+                <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${cluster.percentage}%`,
+                    background: "linear-gradient(90deg, #f59e0b, #f43f5e)",
+                    borderRadius: 3,
+                    transition: "width 1s ease-out"
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
